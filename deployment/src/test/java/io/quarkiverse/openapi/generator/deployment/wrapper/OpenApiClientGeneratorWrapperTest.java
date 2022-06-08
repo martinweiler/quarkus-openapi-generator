@@ -2,6 +2,7 @@ package io.quarkiverse.openapi.generator.deployment.wrapper;
 
 import static io.quarkiverse.openapi.generator.deployment.assertions.Assertions.assertThat;
 import static java.util.Objects.requireNonNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -16,17 +17,24 @@ import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.openapitools.codegen.config.GlobalSettings;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.EnumConstantDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
+import com.github.javaparser.ast.expr.AnnotationExpr;
+import com.github.javaparser.ast.expr.MemberValuePair;
 
 import io.quarkiverse.openapi.generator.annotations.GeneratedClass;
 import io.quarkiverse.openapi.generator.annotations.GeneratedMethod;
+import io.quarkiverse.openapi.generator.deployment.CodegenConfig;
 import io.quarkiverse.openapi.generator.deployment.MockConfigUtils;
 import io.quarkiverse.openapi.generator.deployment.codegen.ModelCodegenConfigParser;
 
@@ -114,8 +122,11 @@ public class OpenApiClientGeneratorWrapperTest {
                         .isTrue();
     }
 
-    @Test
-    void checkAnnotations() throws URISyntaxException, FileNotFoundException {
+    @ParameterizedTest
+    @CsvSource({ "true, \"Simple_API\"", "false, \"simple-openapi.json\"" })
+    void checkAnnotations(String useTitleAsString, String expectedAnnotationValue)
+            throws URISyntaxException, FileNotFoundException {
+        GlobalSettings.setProperty(CodegenConfig.USE_SPEC_TITLE_PROPERTY_NAME, useTitleAsString);
         List<File> restClientFiles = generateRestClientFiles();
 
         assertNotNull(restClientFiles);
@@ -129,8 +140,20 @@ public class OpenApiClientGeneratorWrapperTest {
 
         CompilationUnit compilationUnit = StaticJavaParser.parse(file.orElseThrow());
 
-        compilationUnit.findAll(ClassOrInterfaceDeclaration.class)
-                .forEach(c -> assertThat(c.getAnnotationByClass(GeneratedClass.class)).isPresent());
+        List<ClassOrInterfaceDeclaration> classDeclarations = compilationUnit.findAll(ClassOrInterfaceDeclaration.class);
+        classDeclarations.forEach(c -> assertThat(c.getAnnotationByClass(GeneratedClass.class)).isPresent());
+
+        Optional<AnnotationExpr> generatedClassAnnotation = classDeclarations.get(0).getAnnotationByClass(GeneratedClass.class);
+        assertNotNull(generatedClassAnnotation);
+
+        NodeList<MemberValuePair> annotationParameters = generatedClassAnnotation.get().toNormalAnnotationExpr().get()
+                .getPairs();
+        assertEquals(2, annotationParameters.size());
+        assertEquals("value", annotationParameters.get(0).getName().toString());
+        assertEquals(expectedAnnotationValue, annotationParameters.get(0).getValue().toString());
+
+        assertEquals("tag", annotationParameters.get(1).getName().toString());
+        assertEquals("\"Default\"", annotationParameters.get(1).getValue().toString());
 
         List<MethodDeclaration> methodDeclarations = compilationUnit.findAll(MethodDeclaration.class);
         assertThat(methodDeclarations).isNotEmpty();

@@ -2,6 +2,9 @@ package io.quarkiverse.openapi.generator.deployment.codegen;
 
 import static java.util.Objects.requireNonNull;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -9,14 +12,15 @@ import java.util.Map;
 import java.util.Objects;
 
 import org.eclipse.microprofile.config.spi.ConfigSource;
+import org.openapitools.codegen.config.GlobalSettings;
 
 import io.quarkiverse.openapi.generator.deployment.CodegenConfig;
 import io.smallrye.config.PropertiesConfigSource;
 
 public class SpecInputModel {
 
-    private final InputStream inputStream;
-    private final String filename;
+    private InputStream inputStream;
+    private String filename;
     private final Map<String, String> codegenProperties = new HashMap<>();
 
     public SpecInputModel(final String filename, final InputStream inputStream) {
@@ -30,10 +34,24 @@ public class SpecInputModel {
      * @param filename the name of the file for reference
      * @param inputStream the content of the spec file
      * @param basePackageName the name of the package where the files will be generated
+     * @throws IOException
      */
-    public SpecInputModel(final String filename, final InputStream inputStream, final String basePackageName) {
+    public SpecInputModel(final String filename, final InputStream inputStream, final String basePackageName)
+            throws IOException {
         this(filename, inputStream);
-        this.codegenProperties.put(CodegenConfig.getBasePackagePropertyName(Path.of(filename)), basePackageName);
+        if (Boolean.parseBoolean(GlobalSettings.getProperty(CodegenConfig.USE_SPEC_TITLE_PROPERTY_NAME))) {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            inputStream.transferTo(baos);
+            String titleFromInputStream = CodegenConfig.getTitleFromInputStream(new ByteArrayInputStream(baos.toByteArray()),
+                    filename);
+            this.filename = titleFromInputStream;
+            // reset the InputStream
+            this.inputStream = new ByteArrayInputStream(baos.toByteArray());
+            this.codegenProperties.put(CodegenConfig.getBasePackagePropertyName(titleFromInputStream),
+                    basePackageName.substring(0, basePackageName.lastIndexOf(".") + 1).concat(titleFromInputStream));
+        } else {
+            this.codegenProperties.put(CodegenConfig.getBasePackagePropertyName(Path.of(filename)), basePackageName);
+        }
     }
 
     public String getFileName() {

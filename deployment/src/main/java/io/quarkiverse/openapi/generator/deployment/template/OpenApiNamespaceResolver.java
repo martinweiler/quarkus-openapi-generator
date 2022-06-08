@@ -6,6 +6,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 
+import org.openapitools.codegen.config.GlobalSettings;
+
+import io.quarkiverse.openapi.generator.deployment.CodegenConfig;
 import io.quarkus.qute.EvalContext;
 import io.quarkus.qute.Expression;
 import io.quarkus.qute.NamespaceResolver;
@@ -36,7 +39,10 @@ public class OpenApiNamespaceResolver implements NamespaceResolver {
     }
 
     public String parseUri(String uri) {
-        return Path.of(uri).getFileName().toString();
+        final boolean useTitleAsId = Boolean
+                .parseBoolean(GlobalSettings.getProperty(CodegenConfig.USE_SPEC_TITLE_PROPERTY_NAME));
+        return (useTitleAsId ? CodegenConfig.getSanitizedFileName(Path.of(uri))
+                : Path.of(uri).getFileName().toString());
     }
 
     @Override
